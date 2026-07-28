@@ -5,3 +5,4 @@ pymupdf
 python-docx
 python-pptx
 Pillow  # internal dependency of python-pptx, not used directly by this project
+pytesseract  # OCR fallback for scanned PDFs; also needs the tesseract binary (brew/apt install tesseract)

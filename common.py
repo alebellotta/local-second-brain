@@ -120,21 +120,61 @@ def _markdown_table(rows: list[list[str]]) -> str:
     return "\n".join(lines)
 
 
+OCR_MIN_TEXT_LENGTH = 20  # below this, a page is almost certainly image-only
+OCR_LANGUAGES = "eng"  # e.g. "eng+ita" for multilingual OCR; needs the matching tesseract-lang data
+
+
+def _ocr_pdf_page(page, dpi: int = 200) -> str:
+    """OCR of a rendered PDF page (fallback for scanned PDFs with no text
+    layer). Requires the tesseract binary to be installed (e.g.
+    brew install tesseract tesseract-lang, or apt install tesseract-ocr on
+    Linux); if missing, fails silently and the page is simply left without text."""
+    try:
+        import io
+
+        import pytesseract
+        from PIL import Image
+    except ImportError:
+        return ""
+
+    pix = page.get_pixmap(dpi=dpi)
+    img = Image.open(io.BytesIO(pix.tobytes("png")))
+    try:
+        return pytesseract.image_to_string(img, lang=OCR_LANGUAGES).strip()
+    except Exception:
+        try:
+            return pytesseract.image_to_string(img).strip()
+        except Exception:
+            logging.getLogger("common").exception("OCR failed for page %d", page.number + 1)
+            return ""
+
+
 def _extract_pdf(path: Path) -> str:
-    """Text via PyMuPDF, one section per page."""
+    """Text via PyMuPDF, one section per page. If a page has no extractable
+    text (typical of a scanned PDF), falls back to local OCR before treating
+    it as empty."""
     import fitz
 
     parts: list[str] = []
+    ocr_used = False
 
     doc = fitz.open(str(path))
     try:
         for page_index in range(len(doc)):
             page = doc[page_index]
             text = page.get_text("text").strip()
+            if len(text) < OCR_MIN_TEXT_LENGTH:
+                ocr_text = _ocr_pdf_page(page)
+                if len(ocr_text) > len(text):
+                    text = ocr_text
+                    ocr_used = True
             if text:
                 parts.append(f"## Page {page_index + 1}\n\n{text}")
     finally:
         doc.close()
+
+    if ocr_used:
+        logging.getLogger("common").info("OCR used as fallback for %s", path)
 
     return "\n\n".join(parts)
 

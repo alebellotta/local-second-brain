@@ -4,6 +4,7 @@ logs/
 __pycache__/
 *.pyc
 external_folders_config.py
+eval/golden_queries.json
 
 obsidian-plugin/node_modules/
 

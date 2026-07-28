@@ -80,6 +80,11 @@ afterthought.
   version/format deduplication.
 - **`obsidian-plugin/`** — a minimal Obsidian plugin exposing an in-app search box
   backed by `search.py`.
+- **`eval/eval_search.py`** — a small retrieval-quality harness: runs a set of
+  (query, expected note) pairs through the same search path a user experiences, and
+  reports Precision@1/@3/@5 and mean reciprocal rank. Copy
+  `eval/golden_queries.example.json` to `eval/golden_queries.json` (gitignored) and
+  fill it in with real questions and notes from your own vault.
 
 ### Models used (all via Ollama, all local)
 
@@ -88,6 +93,16 @@ afterthought.
 
 Both are small enough to run comfortably on a laptop CPU. See "Lessons learned" for
 why larger/multimodal models were tried and abandoned for parts of this pipeline.
+
+### Scanned PDFs (OCR)
+
+PDFs with no text layer (scanned documents, photographed pages) fall back to local
+OCR automatically via `pytesseract`. This needs the `tesseract` binary installed
+separately (`brew install tesseract tesseract-lang` on macOS, `apt install
+tesseract-ocr tesseract-ocr-<lang>` on Linux) — if it's missing, those pages are
+simply left without text, no hard failure. Set `OCR_LANGUAGES` in `common.py` (e.g.
+`"eng+ita"`) to match the languages you actually need; each language requires its
+own installed tessdata file.
 
 ## Setup
 
