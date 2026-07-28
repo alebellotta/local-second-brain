@@ -42,10 +42,10 @@ afterthought.
 ## Architecture
 
 ```
-                     ┌─────────────────────────┐
+                     ┌──────────────────────────┐
   cloud drives  ───▶ │ index_external_folders.py│──▶ Notes/  (read-only ingestion,
   (shared, no        │  (daily, no copying)     │           no duplication)
-  cloning wanted)    └─────────────────────────┘
+  cloning wanted)    └──────────────────────────┘
                                                           │
   manually dropped                                        ▼
   documents      ───▶ Sources/ ──▶ watcher.py ──▶ text extraction (PDF/DOCX/PPTX)
