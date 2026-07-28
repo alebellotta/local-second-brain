@@ -1,5 +1,7 @@
 # Building a Private Second Brain: What Breaks When You Keep AI Local, and Why That's the Point
 
+**Alessandro Bellotta**
+
 *A case study on designing a personal knowledge system with local AI models, written for a general and executive audience*
 
 ## Abstract
