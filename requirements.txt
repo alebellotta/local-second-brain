@@ -1,0 +1,7 @@
+watchdog
+chromadb
+requests
+pymupdf
+python-docx
+python-pptx
+Pillow  # internal dependency of python-pptx, not used directly by this project
