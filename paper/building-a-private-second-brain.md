@@ -140,6 +140,16 @@ The complete source code for the system described in this paper — the document
 
 The repository intentionally omits any actual document content, personal file paths, or organization-specific configuration; it is meant to be read and adapted, not run unmodified against someone else's files.
 
+## Addendum (added shortly after initial publication)
+
+Three small follow-up changes were made after this paper's initial release, and are worth recording briefly rather than silently folding into the narrative above.
+
+First, Section 7 noted that the reliability claims throughout were anecdotal rather than benchmarked. A small retrieval-evaluation harness now measures this directly: a fixed set of (question, expected note) pairs is run through the same retrieval path a user experiences, reporting Precision@1/@3/@5 and mean reciprocal rank. On this system's real note collection, the first run scored Precision@1 of 33% and Precision@3/@5 of 67% — and, more usefully than the numbers themselves, it surfaced a concrete failure the paper could previously only describe in the abstract: two pairs of genuinely different documents about the same underlying event sometimes rank each other's content above the correct match. That is a measured instance of exactly the retrieval-ambiguity risk this paper argues local-RAG tooling tends to underweight.
+
+Second, PDF pages with no extractable text layer (scanned documents) now fall back to local OCR instead of being silently skipped — closing a gap the original version left unaddressed.
+
+Third, and most relevant to Section 5.1's central claim: the image-captioning experiment was deliberately repeated against a second, different local vision model (`llava-phi3`, 3.8B parameters) on the same real slide images that had defeated the first one. The result was not an improvement — it was an independent replication of the same failure shape. Asked to describe an abstract technical diagram in English, the new model produced a different but equally confident hallucination (a business operating-model diagram described as "a digital rendering of a brain's neural network"). Asked the identical question in Italian, it did not fail cleanly as the first model had (empty output); it produced several dozen lines of degenerate, repeated table syntax — a failure mode that is arguably worse, since it looks like output rather than an obvious non-answer. And on a simpler logo-style image, the same model gave two different, mutually inconsistent readings of the same picture depending only on the prompt's language. Taken together, this is a more useful outcome than a clean success would have been: it suggests the original finding was not an artifact of one small model's particular weaknesses, but a boundary of what this whole class of local vision model can currently be trusted to do unsupervised. The recommendation stands unchanged — images remain outside the index — now on the basis of two independent negative results instead of one.
+
 ## References
 
 [1] Karpathy, A. (2026). *LLM Knowledge Bases* [gist]. https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
