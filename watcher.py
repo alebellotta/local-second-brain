@@ -147,13 +147,27 @@ def _find_related_candidates(rel: str, note_embedding: list[float]) -> list[tupl
     return candidates
 
 
+_TAGS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "relevant_indices": {"type": "array", "items": {"type": "integer"}},
+    },
+    "required": ["tags", "relevant_indices"],
+}
+
+
 def _generate_tags_and_links(text: str, candidates: list[tuple[str, str]]) -> tuple[str, str]:
-    """Asks the model ONLY which of the numbered related notes are actually
-    relevant (plus tags). The code builds the wikilinks from the candidates'
-    real paths, not the model: this avoids the model inventing/garbling paths
-    that don't correspond to any note (this happened in practice with long
-    names like 'Folder/Subfolder/File.pptx.md'). Returns (tag_line, links_line);
-    both empty if there's nothing useful to suggest."""
+    """Asks the model, with output constrained to a JSON schema natively
+    supported by Ollama, for tags and which (by number) of the listed related
+    notes are relevant. The code still builds the wikilinks from the
+    candidates' real paths, not the model: this avoids the model
+    inventing/garbling paths that don't correspond to any note (this happened
+    in practice with long names like 'Folder/Subfolder/File.pptx.md'). The
+    JSON schema also removes the free-text parsing ("Tags: ..." / "Links:
+    ...") that could previously fail if the model didn't follow the exact
+    requested format. Returns (tag_line, links_line); both empty if there's
+    nothing useful to suggest."""
     if not candidates:
         return "", ""
 
@@ -162,33 +176,25 @@ def _generate_tags_and_links(text: str, candidates: list[tuple[str, str]]) -> tu
     )
 
     prompt = f"""You help organize a personal knowledge base ("second brain").
-Given the note below and a NUMBERED list of related notes found by semantic similarity, respond with:
-1. A "Tags:" line with 3-6 short tags separated by commas (no #)
-2. A "Links:" line with the NUMBERS (not the names) of the notes from the list that are genuinely relevant, comma-separated (e.g. "1, 3"). Leave it empty after the colon if none are.
+Given the note below and a NUMBERED list of related notes found by semantic similarity:
+1. Propose 3-6 short tags for the note.
+2. List the NUMBERS (not the names) of the related notes below that are genuinely relevant — leave it empty if none are.
 
 NOTE:
 {text[:1500]}
 
 RELATED NOTES (numbered):
-{numbered}
+{numbered}"""
 
-Reply with ONLY the two requested lines (Tags: ... and Links: ...), nothing else."""
-
-    raw = common.ollama_generate(common.TAG_MODEL, prompt)
-    if not raw:
+    result = common.ollama_generate_json(common.TAG_MODEL, prompt, _TAGS_SCHEMA)
+    if not result:
         return "", ""
 
-    tag_line = ""
-    indices: list[int] = []
-    for line in raw.splitlines():
-        line = line.strip()
-        if line.lower().startswith("tags:") or line.lower().startswith("tag:"):
-            tag_line = line
-        elif line.lower().startswith("links:") or line.lower().startswith("collegamenti:"):
-            for tok in line.split(":", 1)[1].replace(";", ",").split(","):
-                tok = tok.strip()
-                if tok.isdigit() and 1 <= int(tok) <= len(candidates):
-                    indices.append(int(tok))
+    tags = [str(t).strip() for t in result.get("tags", []) if str(t).strip()]
+    tag_line = "Tags: " + ", ".join(tags) if tags else ""
+
+    raw_indices = result.get("relevant_indices", [])
+    indices = [i for i in raw_indices if isinstance(i, int) and 1 <= i <= len(candidates)]
 
     links: list[str] = []
     seen_targets: set[str] = set()

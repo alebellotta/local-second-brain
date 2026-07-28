@@ -85,14 +85,22 @@ afterthought.
   reports Precision@1/@3/@5 and mean reciprocal rank. Copy
   `eval/golden_queries.example.json` to `eval/golden_queries.json` (gitignored) and
   fill it in with real questions and notes from your own vault.
+- **`chat.py`** — conversational RAG on top of the same index: ask a question, get a
+  synthesized answer with cited sources (the sources are determined by code from
+  what was actually retrieved, not by the model), and ask follow-ups that keep the
+  conversation's context. Complements `search.py`, which returns raw passages instead.
+- **`benchmarks/quantization_bench.py`** — compares speed/quality of the same model
+  at different quantization levels (Q4/Q8/fp16) on the same real task, on your own
+  hardware. See "Lessons learned" for what this found on a CPU-only laptop.
 
 ### Models used (all via Ollama, all local)
 
 - `nomic-embed-text` — embeddings
-- `llama3.2` — tag/link suggestions and the daily digest
+- `llama3.2` (Q4_K_M) — tag/link suggestions, the daily digest, and the RAG chat
 
 Both are small enough to run comfortably on a laptop CPU. See "Lessons learned" for
-why larger/multimodal models were tried and abandoned for parts of this pipeline.
+why larger/multimodal models were tried and abandoned for parts of this pipeline, and
+why Q4_K_M specifically was kept as the default rather than a higher-precision variant.
 
 ### Scanned PDFs (OCR)
 
@@ -193,6 +201,36 @@ because the failure mode is more instructive than the fix.
   export) doesn't need instant reactivity, and treating it read-only (no
   copying, no deletion of the archive if a file disappears upstream) is the
   conservative default that avoids surprises.
+- **A retrieval-quality harness finds real ambiguity, not just bugs.** The first
+  run of `eval/eval_search.py` against a real note collection scored a modest
+  Precision@1 (33%), and the interesting part wasn't the number — it was *which*
+  queries failed: two pairs of genuinely different documents about the same
+  underlying event sometimes outrank each other. That's a property of the
+  embedding model and the data, not something to "fix," but it's much better to
+  know it's there than to find out anecdotally.
+- **A second failed vision model is more useful than a successful one would have
+  been.** The image-captioning experiment (see above) was deliberately repeated
+  against a different, similarly-sized local vision model (`llava-phi3`) on the
+  same real images. It didn't do better — it hallucinated a different but equally
+  confident misreading of the same abstract diagram, and produced degenerate
+  output (not just an empty string) when prompted in Italian. Two independent
+  models failing in related ways is stronger evidence of a genuine capability
+  boundary than one model failing once.
+- **Higher precision isn't automatically better precision for a small structured
+  task.** Benchmarking `llama3.2` at Q4_K_M/Q8_0/fp16 on this hardware showed the
+  expected, large speed gap (Q4 roughly 3x faster than fp16 in tokens/sec) but no
+  clearly monotonic quality improvement on the tag/link-suggestion task specifically
+  — fp16 was not obviously better than Q4 on that one job. The default stayed at
+  Q4_K_M: it was already the fastest, and the benchmark didn't surface a quality
+  reason to trade that away.
+- **A JSON schema is a cheaper fix than a better prompt.** The tag/link prompt
+  originally asked the model to format its answer as two labeled free-text lines,
+  parsed with string matching. Ollama's native structured-output support
+  (`format` as a JSON schema) removes that parsing step entirely — the model
+  fills in fields, the code reads them directly. This doesn't replace the
+  numbered-candidate-list safeguard above (the model still can't invent a path,
+  it can only pick a valid index), but it does remove a second, smaller class of
+  failure: the model almost-but-not-quite following a free-text format.
 
 ## What this repository deliberately does not include
 

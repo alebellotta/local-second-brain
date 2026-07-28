@@ -1,5 +1,6 @@
 """Shared helpers for the local second brain: chunking, Ollama calls, Chroma access,
 and document-to-note conversion (PDF/DOCX/PPTX/TXT)."""
+import json
 import logging
 import os
 import re
@@ -107,6 +108,25 @@ def ollama_generate(model: str, prompt: str) -> str | None:
         return resp.json()["response"].strip()
     except Exception:
         logging.getLogger("common").exception("Ollama generation error")
+        return None
+
+
+def ollama_generate_json(model: str, prompt: str, schema: dict) -> dict | None:
+    """Like ollama_generate, but constrains the output to a JSON schema
+    (natively supported by Ollama via the "format" parameter). More robust
+    than free-text parsing for structured data: the model only has to choose
+    the values, not also guess the exact syntax to follow — this removes a
+    whole class of parsing failures without needing a more elaborate prompt."""
+    try:
+        resp = requests.post(
+            f"{OLLAMA_URL}/api/generate",
+            json={"model": model, "prompt": prompt, "format": schema, "stream": False},
+            timeout=180,
+        )
+        resp.raise_for_status()
+        return json.loads(resp.json()["response"])
+    except Exception:
+        logging.getLogger("common").exception("Ollama structured-output error")
         return None
 
 
