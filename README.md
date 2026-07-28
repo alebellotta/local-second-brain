@@ -12,9 +12,14 @@ between related notes. A companion Obsidian plugin adds an in-app search box bac
 by the same local index.
 
 This repository accompanies a short paper on the design decisions and failure modes
-encountered while building it (see `paper/`). It's meant to be read and adapted, not
-run as-is out of the box on someone else's machine — file paths, model names, and
-the daily-schedule mechanism are all things you'll want to tune to your own setup.
+encountered while building it:
+
+📄 **[Building a Private Second Brain: What Breaks When You Keep AI Local, and Why That's the Point](paper/building-a-private-second-brain.pdf)**
+(also available as [Markdown](paper/building-a-private-second-brain.md))
+
+It's meant to be read and adapted, not run as-is out of the box on someone else's
+machine — file paths, model names, and the daily-schedule mechanism are all things
+you'll want to tune to your own setup.
 
 ## Why local?
 
