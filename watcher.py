@@ -156,6 +156,29 @@ _TAGS_SCHEMA = {
     "required": ["tags", "relevant_indices"],
 }
 
+MAX_TAG_LENGTH = 40
+
+
+def _sanitize_tag(raw: str) -> str | None:
+    """Tags arrive as free-text strings from the model: the JSON schema
+    constrains the SHAPE of the response (an array of strings) but not the
+    CONTENT of each string. Without this check, a tag like "x]]\\n\\n##
+    Section" written verbatim into tag_line would act as an injection into
+    the note: a newline breaks out of the intended "Tags: ..." line and
+    injects arbitrary markdown (headings, frontmatter, even a forged
+    <!-- second-brain:... --> marker), while "[[...]]" creates a real,
+    clickable Obsidian wikilink — bypassing the "links are built by code from
+    numbered indices" safeguard, which protects links_line but not tag_line.
+    A tag containing one of these sequences is dropped entirely (not
+    truncated/cleaned in place: if it's already been tampered with, losing it
+    is safer than keeping a mangled, still-suspicious version)."""
+    tag = raw.strip()
+    if not tag or len(tag) > MAX_TAG_LENGTH:
+        return None
+    if any(seq in tag for seq in ("\n", "\r", "[[", "]]", "<!--", "-->")):
+        return None
+    return tag
+
 
 def _generate_tags_and_links(text: str, candidates: list[tuple[str, str]]) -> tuple[str, str]:
     """Asks the model, with output constrained to a JSON schema natively
@@ -190,7 +213,10 @@ RELATED NOTES (numbered):
     if not result:
         return "", ""
 
-    tags = [str(t).strip() for t in result.get("tags", []) if str(t).strip()]
+    raw_tags = [str(t) for t in result.get("tags", [])]
+    tags = [t for t in (_sanitize_tag(rt) for rt in raw_tags) if t]
+    if len(tags) < len(raw_tags):
+        log.warning("Dropped %d invalid/suspicious tag(s) from the model's response", len(raw_tags) - len(tags))
     tag_line = "Tags: " + ", ".join(tags) if tags else ""
 
     raw_indices = result.get("relevant_indices", [])

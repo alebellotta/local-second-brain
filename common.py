@@ -270,12 +270,55 @@ def _extract_txt(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
 
 
+WHISPER_MODEL_SIZE = "small"  # tiny/base/small/medium/large-v3: speed vs. accuracy trade-off on CPU
+AUDIO_LANGUAGE = None  # None = auto-detect; set e.g. "en" to skip detection and speed things up
+
+_whisper_model = None
+
+
+def _get_whisper_model():
+    """Loads the Whisper model once per process (same pattern as the Chroma
+    client): loading takes a few seconds, no point repeating it for every
+    audio file in the same watcher session."""
+    global _whisper_model
+    if _whisper_model is None:
+        from faster_whisper import WhisperModel
+
+        _whisper_model = WhisperModel(WHISPER_MODEL_SIZE, device="cpu", compute_type="int8")
+    return _whisper_model
+
+
+def _extract_audio(path: Path) -> str:
+    """Transcribes an audio recording (e.g. a meeting) with local Whisper
+    (faster-whisper, CPU with int8 quantization — no dedicated GPU
+    acceleration on this class of hardware, see the quantization note
+    elsewhere in this file for llama3.2). Each segment becomes a line with a
+    timestamp, useful for navigating long recordings without listening to
+    the whole thing again."""
+    model = _get_whisper_model()
+    segments, info = model.transcribe(str(path), language=AUDIO_LANGUAGE)
+
+    lines = [
+        f"**[{int(s.start) // 60:02d}:{int(s.start) % 60:02d}]** {s.text.strip()}"
+        for s in segments
+        if s.text.strip()
+    ]
+    if not lines:
+        return ""
+
+    header = f"Detected language: {info.language} (confidence {info.language_probability:.0%})"
+    return header + "\n\n" + "\n\n".join(lines)
+
+
+AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav", ".mp4", ".aac", ".flac"}
+
 SOURCE_EXTRACTORS = {
     ".pdf": _extract_pdf,
     ".docx": _extract_docx,
     ".pptx": _extract_pptx,
     ".txt": _extract_txt,
     ".md": _extract_txt,
+    **{ext: _extract_audio for ext in AUDIO_EXTENSIONS},
 }
 
 

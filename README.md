@@ -94,6 +94,14 @@ afterthought.
 - **`benchmarks/quantization_bench.py`** — compares speed/quality of the same model
   at different quantization levels (Q4/Q8/fp16) on the same real task, on your own
   hardware. See "Lessons learned" for what this found on a CPU-only laptop.
+- **`redteam/prompt_injection_test.py`** — checks that a "malicious" source document
+  (text aimed at the model rather than a human) can't make the tag/link pipeline write
+  something misleading into a note. See "Lessons learned" for what it found.
+- **`finetune/`** — prepares your own vault's notes into a dataset and runs a light
+  LoRA fine-tune (MLX, Apple Silicon only) to adapt a small local model's writing style
+  to your corpus. Ships with a synthetic example dataset (`finetune/data.example/`) so
+  the mechanism can be tried without a real vault. See "Lessons learned" for what this
+  found on a small, real note collection.
 
 ### Models used (all via Ollama, all local)
 
@@ -113,6 +121,23 @@ tesseract-ocr tesseract-ocr-<lang>` on Linux) — if it's missing, those pages a
 simply left without text, no hard failure. Set `OCR_LANGUAGES` in `common.py` (e.g.
 `"eng+ita"`) to match the languages you actually need; each language requires its
 own installed tessdata file.
+
+### Audio recordings (meeting transcripts)
+
+Supported formats: `.mp3`, `.m4a`, `.wav`, `.mp4`, `.aac`, `.flac` — same `Sources/`
+flow as any other document, no extra configuration. Transcription uses local Whisper
+(`faster-whisper`, `small` model, CPU with int8 quantization — see
+`WHISPER_MODEL_SIZE`/`AUDIO_LANGUAGE` in `common.py`); each segment becomes a
+timestamped line (`**[MM:SS]**`) so you can navigate a long recording without
+re-listening to it. `AUDIO_LANGUAGE` defaults to `None` (auto-detect); set it to a
+fixed language code to skip detection and speed things up when you already know what
+to expect.
+
+Tested end-to-end with synthetic speech (macOS `say`, meeting-style sentences):
+transcription, indexing, and tag/link suggestions all work exactly as they would for
+a PDF or DOCX. Not tested against a real meeting recording (multiple speakers,
+background noise, overlapping speech) — expect lower transcription quality there than
+with clean synthetic audio.
 
 ## Setup
 
@@ -233,6 +258,38 @@ because the failure mode is more instructive than the fix.
   numbered-candidate-list safeguard above (the model still can't invent a path,
   it can only pick a valid index), but it does remove a second, smaller class of
   failure: the model almost-but-not-quite following a free-text format.
+- **A schema constrains shape, not content — and the gap is exploitable.** The JSON
+  schema above stops the model from inventing a malformed response, but nothing
+  stopped a *tag string itself* from containing `[[a wikilink]]` or an embedded
+  newline. `redteam/prompt_injection_test.py` planted an injected instruction inside
+  a source document asking the model to emit exactly such a tag. Tested in English
+  against `llama3.2`, the model **complied** — it produced the literal string
+  `[[Confidential CEO Data]]` as a tag, which would have rendered as a real, clickable
+  Obsidian link had it reached the note. The same test in Italian didn't convince the
+  model, which is itself the point: model compliance with an injection is
+  probabilistic and inconsistent across languages, so it can't be the only defense.
+  `_sanitize_tag()` in `watcher.py` now rejects any tag containing wikilink brackets,
+  newlines, or the suggestions-marker sequence before it's ever written — a
+  content-level check the schema alone couldn't provide.
+- **A LoRA fine-tune mostly learns the pipeline's formatting conventions before it
+  learns a personal voice.** `finetune/` fine-tuned a small local model (LoRA, MLX, on
+  Apple Silicon) on a real note collection — 13 notes, about 165KB of text, split into
+  214/26/26 train/valid/test records. Training genuinely worked: validation loss
+  dropped consistently at every checkpoint (from 3.60 to 2.10 over 200 iterations),
+  only 0.216% of the model's parameters were touched (a 28MB adapter file, not a
+  duplicated model), and the whole run took about 13 minutes on a consumer laptop. But
+  the most consistent qualitative change wasn't a personal "writing style" — it was the
+  model reproducing the *ingestion pipeline's own markdown conventions* (numbered slide
+  headers, short bullet-style fragments) more than any authorial voice, which makes
+  sense once you notice most of the corpus is auto-extracted business documents, not
+  personal reflective writing. The effect was also inconsistent depending on how the
+  model was prompted: it showed up clearly with raw text completion (the format
+  actually used for training) and mostly disappeared when prompted through the
+  instruct model's normal chat template — a training/inference format mismatch that
+  limits how much the adapter generalizes to everyday chat use. None of this is a
+  failure of the technique; it's a direct consequence of fine-tuning on a genuinely
+  small, auto-extracted corpus, which is precisely the caveat worth recording rather
+  than glossing over.
 
 ## What this repository deliberately does not include
 
