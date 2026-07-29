@@ -270,7 +270,26 @@ because the failure mode is more instructive than the fix.
   probabilistic and inconsistent across languages, so it can't be the only defense.
   `_sanitize_tag()` in `watcher.py` now rejects any tag containing wikilink brackets,
   newlines, or the suggestions-marker sequence before it's ever written — a
-  content-level check the schema alone couldn't provide.
+  content-level check the schema alone couldn't provide. Its tag count is also capped
+  (`maxItems: 10` in the schema, plus the identical cap in code — again, never trust
+  the schema alone) so a misbehaving model can't bloat a note with hundreds of tags.
+  The same two injected documents were also tested against the RAG chat (`chat.py`):
+  in both cases the model retrieved the malicious note as context but explicitly
+  recognized the embedded instruction as something to ignore rather than follow —
+  encouraging, but observed behavior, not a structural guarantee the way tag
+  sanitization is (chat output is free text shown to the user, not something the code
+  parses and writes into a file, so there's no equivalent code-level backstop here).
+- **A symlink inside `Sources/` silently read whatever it pointed to.** A concrete test
+  (a symlink placed inside `Sources/` pointing at a file with fake "secret" content
+  outside the vault entirely) showed the pipeline extracting, indexing, and making that
+  content searchable and chattable — exactly as if the user had deliberately dropped it
+  in. `Path.read_text()` and the other extraction functions follow symlinks
+  transparently by default; nothing in the code checked for that. `convert_source()`
+  now rejects any path whose resolved location doesn't actually fall under `Sources/`
+  before reading it, closing the gap for both single-file and whole-directory symlinks
+  — verified again after the fix. This matters most for synced/shared folders (cloud
+  drives, shared libraries) where a collaborator, or a malformed archive extraction,
+  could introduce a symlink like this without you noticing.
 - **A LoRA fine-tune mostly learns the pipeline's formatting conventions before it
   learns a personal voice.** `finetune/` fine-tuned a small local model (LoRA, MLX, on
   Apple Silicon) on a real note collection — 13 notes, about 165KB of text, split into

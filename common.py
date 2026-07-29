@@ -441,6 +441,16 @@ def convert_source(path: Path) -> Path | None:
     markdown note in Notes/ (same folder structure). Returns the path of the
     note written, or None if nothing needed to be (or could be) written."""
     log = logging.getLogger("common")
+
+    try:
+        path.resolve().relative_to(SOURCES_DIR.resolve())
+    except ValueError:
+        log.warning(
+            "Skipping %s: resolved path points outside Sources/ (likely a symlink), "
+            "not processing it to avoid indexing unintended external files", path
+        )
+        return None
+
     out_path = note_path_for_source(path)
     current_source_mtime = path.stat().st_mtime
     if out_path.exists():

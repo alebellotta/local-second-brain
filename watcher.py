@@ -150,7 +150,7 @@ def _find_related_candidates(rel: str, note_embedding: list[float]) -> list[tupl
 _TAGS_SCHEMA = {
     "type": "object",
     "properties": {
-        "tags": {"type": "array", "items": {"type": "string"}},
+        "tags": {"type": "array", "items": {"type": "string"}, "maxItems": 10},
         "relevant_indices": {"type": "array", "items": {"type": "integer"}},
     },
     "required": ["tags", "relevant_indices"],
@@ -213,7 +213,7 @@ RELATED NOTES (numbered):
     if not result:
         return "", ""
 
-    raw_tags = [str(t) for t in result.get("tags", [])]
+    raw_tags = [str(t) for t in result.get("tags", [])][:10]  # cap in code too, not just in the schema
     tags = [t for t in (_sanitize_tag(rt) for rt in raw_tags) if t]
     if len(tags) < len(raw_tags):
         log.warning("Dropped %d invalid/suspicious tag(s) from the model's response", len(raw_tags) - len(tags))
