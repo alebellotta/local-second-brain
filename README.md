@@ -8,8 +8,8 @@ queries are ever sent to a cloud AI provider.
 It watches your vault in real time, ingests external documents (PDF, Word,
 PowerPoint, plain text), extracts and structures their content, embeds and indexes
 everything into a local vector store, and — optionally — proposes tags and links
-between related notes. A companion Obsidian plugin adds an in-app search box backed
-by the same local index.
+between related notes. A companion Obsidian plugin adds an in-app search box and a
+RAG chat, both backed by the same local index.
 
 This repository accompanies a short paper on the design decisions and failure modes
 encountered while building it:
@@ -79,7 +79,9 @@ afterthought.
 - **`common.py`** — shared helpers: chunking, Ollama calls, document extraction,
   version/format deduplication.
 - **`obsidian-plugin/`** — a minimal Obsidian plugin exposing an in-app search box
-  backed by `search.py`.
+  backed by `search.py`, and a chat modal backed by `chat.py --json` (same
+  one-shot-subprocess pattern; the plugin keeps conversation history between
+  messages so `chat.py` itself stays stateless per call).
 - **`eval/eval_search.py`** — a small retrieval-quality harness: runs a set of
   (query, expected note) pairs through the same search path a user experiences, and
   reports Precision@1/@3/@5 and mean reciprocal rank. Copy

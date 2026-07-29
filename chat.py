@@ -3,11 +3,19 @@
 synthesized answer with cited sources, and can ask follow-up questions while
 keeping the conversation's context.
 
-Usage:
+Interactive usage:
     ./venv/bin/python chat.py
     (type 'exit' or 'quit' to leave; also works non-interactively, e.g.
     echo "question" | python chat.py)
+
+One-shot usage (for the Obsidian plugin): reads a JSON payload from stdin
+{"question": "...", "history": [{"q": "...", "a": "..."}, ...]} and prints
+{"answer": "...", "sources": [...]} or {"error": "..."} to stdout.
+    ./venv/bin/python chat.py --json < request.json
 """
+import json
+import sys
+
 import common
 
 N_CONTEXT_CHUNKS = 6
@@ -62,6 +70,29 @@ def ask(question: str, history: list[tuple[str, str]]) -> tuple[str | None, list
     return answer, sources
 
 
+def main_json() -> None:
+    """One-shot mode: one request, one answer, then exit. Used by the
+    Obsidian plugin, which keeps the conversation history itself between
+    invocations (no long-running process to manage)."""
+    try:
+        payload = json.loads(sys.stdin.read())
+        question = payload["question"]
+        history = [(turn["q"], turn["a"]) for turn in payload.get("history", [])]
+    except Exception as e:
+        print(json.dumps({"error": f"Invalid request: {e}"}))
+        return
+
+    answer, sources = ask(question, history)
+    if not sources:
+        print(json.dumps({"error": "No relevant context found (empty index, or Ollama unreachable?)"}))
+        return
+    if not answer:
+        print(json.dumps({"error": "Error generating the answer."}))
+        return
+
+    print(json.dumps({"answer": answer, "sources": sources}, ensure_ascii=False))
+
+
 def main() -> None:
     print("RAG chat over your second brain. Type 'exit' or 'quit' to leave.\n")
     history: list[tuple[str, str]] = []
@@ -91,4 +122,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    if "--json" in sys.argv[1:]:
+        main_json()
+    else:
+        main()
